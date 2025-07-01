@@ -1,0 +1,528 @@
+[
+    {
+        "id": "2bc2d46292aae71f",
+        "type": "inject",
+        "z": "b9ae0bb0f5360527",
+        "name": "Update Weather (every 5min)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "300",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 570,
+        "y": 300,
+        "wires": [
+            [
+                "b3cfd559401f9bfa"
+            ]
+        ]
+    },
+    {
+        "id": "b3cfd559401f9bfa",
+        "type": "http request",
+        "z": "b9ae0bb0f5360527",
+        "name": "Get Real-time Weather",
+        "method": "GET",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "https://api.openweathermap.org/data/2.5/weather?q=Luxembourg&units=metric&appid=766235adcf238219188fb7ba9a2b838b",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "basic",
+        "senderr": false,
+        "headers": [],
+        "x": 840,
+        "y": 300,
+        "wires": [
+            [
+                "733d598a4f7b149d",
+                "c27f425065c71028"
+            ]
+        ]
+    },
+    {
+        "id": "c27f425065c71028",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Weather API Response",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 850,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "733d598a4f7b149d",
+        "type": "function",
+        "z": "b9ae0bb0f5360527",
+        "name": "Extract Weather Data",
+        "func": "// Check if we have valid data\nif (!msg.payload || !msg.payload.main || !msg.payload.weather) {\n    node.error(\"Invalid weather data received\");\n    return null;\n}\n\n// Extract and format data\nconst weather = msg.payload;\n\n// Current time\nconst now = new Date();\nconst hours = now.getHours();\nconst minutes = now.getMinutes();\nconst timeStr = hours + ':' + (minutes < 10 ? '0' : '') + minutes;\n\n// Round temperature to nearest integer\nconst temperature = Math.round(weather.main.temp);\n\n// Store weather data in flow context\nflow.set('temperature', temperature + '°C');\nflow.set('humidity', weather.main.humidity + '%');\nflow.set('wind', Math.round(weather.wind.speed) + ' km/h');\n\n// Ensure we have weather description\nlet description = \"Unknown\";\nif (weather.weather && weather.weather.length > 0 && weather.weather[0].description) {\n    description = weather.weather[0].description;\n}\nflow.set('description', description);\n\n// Store city name and current time\nflow.set('city', weather.name + ' ' + timeStr);\nflow.set('current_time', timeStr);\n\n// Add last_updated timestamp to track successful updates\nflow.set('last_updated', Date.now());\n\n// Set weather display mode if not set\nif (!flow.get('weather_mode')) {\n    flow.set('weather_mode', 'temperature');\n}\n\n// Pass data to display handler\nmsg.payload = 'weather_update';\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1080,
+        "y": 300,
+        "wires": [
+            [
+                "b43b064180d72d86",
+                "1996b9100a3bb7f4"
+            ]
+        ]
+    },
+    {
+        "id": "b43b064180d72d86",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Weather Data Processed",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1130,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "33bac39479946e4c",
+        "type": "inject",
+        "z": "b9ae0bb0f5360527",
+        "name": "Error Recovery (every hour)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "3600",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0,
+        "topic": "",
+        "payload": "check",
+        "payloadType": "str",
+        "x": 360,
+        "y": 360,
+        "wires": [
+            [
+                "1d5642a82f5f8ae0"
+            ]
+        ]
+    },
+    {
+        "id": "1d5642a82f5f8ae0",
+        "type": "function",
+        "z": "b9ae0bb0f5360527",
+        "name": "Check Last Update Time",
+        "func": "// Get last update timestamp\nconst lastUpdated = flow.get('last_updated') || 0;\nconst now = Date.now();\n\n// If no update in the last 20 minutes (1200000ms), force refresh\nif (now - lastUpdated > 1200000) {\n    node.warn(\"No weather updates for 20+ minutes. Forcing refresh.\");\n    // Set payload to trigger a new weather fetch\n    msg.payload = Date.now();\n    return msg;\n}\n\n// Otherwise no need to do anything\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 360,
+        "wires": [
+            [
+                "b3cfd559401f9bfa"
+            ]
+        ]
+    },
+    {
+        "id": "3e8f8cd8f307e956",
+        "type": "inject",
+        "z": "b9ae0bb0f5360527",
+        "name": "Initialize & Clear LCD",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            },
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "init",
+        "payload": "",
+        "payloadType": "str",
+        "x": 1610,
+        "y": 420,
+        "wires": [
+            [
+                "ab0cf9e476c8846c"
+            ]
+        ]
+    },
+    {
+        "id": "d72a326f373d8fc1",
+        "type": "exec",
+        "z": "b9ae0bb0f5360527",
+        "command": "python /home/jeremy/Documents/digilab/lcd/init.py",
+        "addpay": "",
+        "append": "--line 1 --message \"Initializing...\" && python /home/star2050/digilab/lcd/init.py --line 2 --message \"Please wait\"",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Run Init/Clear Script",
+        "x": 1980,
+        "y": 420,
+        "wires": [
+            [
+                "21f554a9c2ef9cce"
+            ],
+            [
+                "4c9ad6a9d113f758"
+            ],
+            [
+                "5af4fd7514fecd4c"
+            ]
+        ]
+    },
+    {
+        "id": "21f554a9c2ef9cce",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Init stdout",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 2160,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "4c9ad6a9d113f758",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Init stderr",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 2160,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "5af4fd7514fecd4c",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Init RC",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 2150,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "1996b9100a3bb7f4",
+        "type": "function",
+        "z": "b9ae0bb0f5360527",
+        "name": "Weather Display Handler",
+        "func": "// Get current weather display mode\nconst weatherMode = flow.get('weather_mode') || 'temperature';\n\n// Get data from flow context\nconst temperature = flow.get('temperature') || 'N/A';\nconst humidity = flow.get('humidity') || 'N/A';\nconst wind = flow.get('wind') || 'N/A';\nconst description = flow.get('description') || 'N/A';\nconst city = flow.get('city') || 'Connecting...';\n\n// Clean function to remove/replace problematic characters\nfunction cleanText(text) {\n    if (typeof text !== 'string') return 'N/A';\n    \n    return text\n        .replace(/&#x2F;/g, '|')         // Replace HTML entity for slash\n        .replace(/&#(\\d+);/g, '')        // Remove all other HTML entities\n        .replace(/[^\\x20-\\x7E]/g, '')    // Keep only basic ASCII characters\n        .replace(/[^\\w\\s.,°%\\/-:]/g, ''); // Keep alphanumeric, spaces, and basic symbols\n}\n\n// Ensure values are strings and limit to display width (16 chars for standard LCD)\nfunction formatForDisplay(text, maxLength = 16) {\n    let cleaned = cleanText(String(text));\n    return cleaned.length > maxLength ? cleaned.substring(0, maxLength) : cleaned;\n}\n\n// Clean all displayed text\nconst cleanCity = formatForDisplay(city);\nconst cleanTemp = formatForDisplay(temperature);\nconst cleanHumidity = formatForDisplay(humidity);\nconst cleanWind = formatForDisplay(wind);\n\n// Special formatting for description - capitalize first letter\nlet cleanDescription = formatForDisplay(description);\nif (cleanDescription.length > 0) {\n    cleanDescription = cleanDescription.charAt(0).toUpperCase() + cleanDescription.slice(1);\n}\n\n// Prepare messages for line 1 and 2 based on weather mode\nlet line1;\nlet line2;\n\nswitch (weatherMode) {\n    case 'temperature':\n        line1 = { payload: \"Temperatur\", line: 1 };\n        line2 = { payload: cleanTemp, line: 2 };\n        break;\n    case 'humidity':\n        line1 = { payload: \"Luftfeuchtigkeit\", line: 1 };\n        line2 = { payload: cleanHumidity, line: 2 };\n        break;\n    case 'wind':\n        line1 = { payload: \"Windgeschwindigk.\", line: 1 };\n        line2 = { payload: cleanWind, line: 2 };\n        break;\n    case 'description':\n        line1 = { payload: \"Wetterlage\", line: 1 };\n        line2 = { payload: cleanDescription, line: 2 };\n        break;\n    case 'city':\n        line1 = { payload: \"Standort\", line: 1 };\n        line2 = { payload: cleanCity, line: 2 };\n        break;\n    default:\n        line1 = { payload: \"Temperatur\", line: 1 };\n        line2 = { payload: cleanTemp, line: 2 };\n}\n\nnode.log(\"Weather display mode: \" + weatherMode);\nnode.log(\"Line 1: '\" + line1.payload + \"', Line 2: '\" + line2.payload + \"'\");\n\n// Return both messages as array\nreturn [line1, line2];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1350,
+        "y": 300,
+        "wires": [
+            [
+                "151a953adf1df738"
+            ],
+            [
+                "5a891e0d105c5864"
+            ]
+        ]
+    },
+    {
+        "id": "cd04a40c673c7eee",
+        "type": "template",
+        "z": "b9ae0bb0f5360527",
+        "name": "Build Write Command",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": " --line \"{{line}}\" --message \"{{payload}}\"",
+        "output": "str",
+        "x": 1740,
+        "y": 300,
+        "wires": [
+            [
+                "37d4dde3f2ade25d",
+                "02785858b756d613"
+            ]
+        ]
+    },
+    {
+        "id": "5a891e0d105c5864",
+        "type": "delay",
+        "z": "b9ae0bb0f5360527",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "600",
+        "timeoutUnits": "milliseconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1550,
+        "y": 320,
+        "wires": [
+            [
+                "cd04a40c673c7eee"
+            ]
+        ]
+    },
+    {
+        "id": "37d4dde3f2ade25d",
+        "type": "exec",
+        "z": "b9ae0bb0f5360527",
+        "command": "python /home/jeremy/Documents/digilab/lcd/write.py",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Run Write Script",
+        "x": 1980,
+        "y": 300,
+        "wires": [
+            [
+                "0b7b303e8658b7e5"
+            ],
+            [
+                "7316b9a11ecd1b87"
+            ],
+            [
+                "d508ef3e520866ee"
+            ]
+        ]
+    },
+    {
+        "id": "02785858b756d613",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Debug Write Command",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1930,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "0b7b303e8658b7e5",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Write stdout",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 2150,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "7316b9a11ecd1b87",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Write stderr",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 2150,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "d508ef3e520866ee",
+        "type": "debug",
+        "z": "b9ae0bb0f5360527",
+        "name": "Write RC",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 2140,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "151a953adf1df738",
+        "type": "delay",
+        "z": "b9ae0bb0f5360527",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "300",
+        "timeoutUnits": "milliseconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1550,
+        "y": 280,
+        "wires": [
+            [
+                "cd04a40c673c7eee"
+            ]
+        ]
+    },
+    {
+        "id": "ab0cf9e476c8846c",
+        "type": "delay",
+        "z": "b9ae0bb0f5360527",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "1",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1800,
+        "y": 420,
+        "wires": [
+            [
+                "d72a326f373d8fc1"
+            ]
+        ]
+    },
+    {
+        "id": "7cc62c26b68a04ba",
+        "type": "comment",
+        "z": "b9ae0bb0f5360527",
+        "name": "Weather Information",
+        "info": "",
+        "x": 610,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "mode_switch",
+        "type": "inject",
+        "z": "b9ae0bb0f5360527",
+        "name": "Switch Weather Mode",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0,
+        "topic": "",
+        "payload": "switch_mode",
+        "payloadType": "str",
+        "x": 860,
+        "y": 400,
+        "wires": [
+            [
+                "mode_handler"
+            ]
+        ]
+    },
+    {
+        "id": "mode_handler",
+        "type": "function",
+        "z": "b9ae0bb0f5360527",
+        "name": "Cycle Weather Modes",
+        "func": "// Available weather modes\nconst modes = ['temperature', 'humidity', 'wind', 'description', 'city'];\n\n// Get current mode\nconst currentMode = flow.get('weather_mode') || 'temperature';\n\n// Find current index\nconst currentIndex = modes.indexOf(currentMode);\n\n// Get next mode (cycle back to 0 if at end)\nconst nextIndex = (currentIndex + 1) % modes.length;\nconst nextMode = modes[nextIndex];\n\n// Set new mode\nflow.set('weather_mode', nextMode);\n\nnode.log(\"Weather mode switched from \" + currentMode + \" to \" + nextMode);\n\n// Trigger display update\nmsg.payload = 'mode_switched';\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1120,
+        "y": 340,
+        "wires": [
+            [
+                "1996b9100a3bb7f4"
+            ]
+        ]
+    },
+    {
+        "id": "c5d0faa6abdbdcb8",
+        "type": "rpi-gpio in",
+        "z": "b9ae0bb0f5360527",
+        "name": "",
+        "pin": "19",
+        "intype": "tri",
+        "debounce": "25",
+        "read": false,
+        "bcm": true,
+        "x": 1090,
+        "y": 380,
+        "wires": [
+            [
+                "mode_handler"
+            ]
+        ]
+    }
+]
